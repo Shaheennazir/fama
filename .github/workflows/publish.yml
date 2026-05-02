@@ -1,0 +1,60 @@
+name: Publish
+
+on:
+  push:
+    branches: [master]
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Build wheel
+        run: |
+          python -c "
+          import zipfile, re, os
+          whl = [f for f in os.listdir('dist') if f.endswith('.whl')][0]
+          tmp = whl + '.tmp'
+          with zipfile.ZipFile('dist/' + whl, 'r') as zin:
+              with zipfile.ZipFile('dist/' + tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+                  for item in zin.infolist():
+                      data = zin.read(item.filename)
+                      if item.filename.endswith('METADATA'):
+                          text = data.decode('utf-8')
+                          text = re.sub(r'License-File: LICENSE\r?\n', '', text)
+                          text = re.sub(r'Dynamic: license-file\r?\n', '', text)
+                          data = text.encode('utf-8')
+                      zout.writestr(item, data)
+          os.replace('dist/' + tmp, 'dist/' + whl)
+          "
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
