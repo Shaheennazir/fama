@@ -1,0 +1,150 @@
+Metadata-Version: 2.4
+Name: fama
+Version: 0.1.0
+Summary: Failure-Aware Meta-Agentic Framework - A framework for failure-aware agent optimization
+Author: FAMA Authors
+License: MIT
+Project-URL: Homepage, https://github.com/fama/fama
+Project-URL: Documentation, https://github.com/fama/fama#readme
+Project-URL: Repository, https://github.com/fama/fama
+Keywords: agent,meta-agentic,failure-aware,optimization,llm
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: openai
+Requires-Dist: openai>=1.0.0; extra == "openai"
+Provides-Extra: anthropic
+Requires-Dist: anthropic>=0.20.0; extra == "anthropic"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Dynamic: license-file
+
+# FAMA: Failure-Aware Meta-Agentic Framework
+
+FAMA is a meta-agentic framework that optimizes agent performance by dynamically selecting specialized agents based on failure analysis. It operates at a higher level than the agents it optimizes, making it model-agnostic and generalizable.
+
+## Overview
+
+FAMA implements a two-stage failure-aware optimization pipeline:
+
+1. **Stage 1: Analysis** - Run baseline agent on tasks, collect failures, and analyze each failure with |E|=4 independent error-analysis agents (one per error category). The outputs are concatenated and passed to an Orchestrator to identify the primary error(s), then a Mitigation agent selects a minimal subset of |A|=6 specialized agents to address the failures.
+
+2. **Stage 2: Mitigation** - Re-run with only the selected minimal agent subset injected.
+
+## Error Categories
+
+| Category | Name | Description |
+|----------|------|-------------|
+| DCV | Domain Constraint Violation | Agent performs a forbidden action or skips a required step |
+| WRCO | Wrong Retrieval from Complex Tool Outputs | Agent fails to correctly parse nested structures, lists, or multiple items from tool outputs |
+| CM | Contextual Misinterpretation | Agent understands words but misses the actual user intent |
+| IFU | Incomplete Fulfillment/Early Stopping | Agent stops at difficulty instead of trying alternatives |
+
+## Agent Pool
+
+| Agent | Name | Purpose |
+|-------|------|---------|
+| DCE | Domain Constraints Extractor | Extracts and enforces domain-specific constraints |
+| TSA | Tool Suggestion Agent | Suggests appropriate tools for complex tasks |
+| TOR | Tool Output Reformatter | Reformats and clarifies tool outputs for better parsing |
+| Planner | Planner Agent | Creates and refines execution plans |
+| Verifier | Verifier Agent | Validates task completion and correctness |
+| Memory | Memory Agent | Maintains context and history for long-running tasks |
+
+## Installation
+
+```bash
+pip install fama
+```
+
+For OpenAI support:
+```bash
+pip install fama[openai]
+```
+
+For Anthropic support:
+```bash
+pip install fame[anthropic]
+```
+
+## Quick Start
+
+```python
+from faima.core.engine import FAMAEngine
+from faima.llm.openai_client import OpenAIClient
+from faima.agents.domain_constraints_extractor import DomainConstraintsExtractor
+from faima.agents.tool_suggestion import ToolSuggestionAgent
+from faima.agents.tool_output_reformatter import ToolOutputReformatter
+from faima.agents.planner import PlannerAgent
+from faima.agents.verifier import VerifierAgent
+from faima.agents.memory import MemoryAgent
+
+# Initialize LLM client
+llm_client = OpenAIClient(model="gpt-4")
+
+# Create agent pool
+agent_pool = {
+    AgentType.DCE: DomainConstraintsExtractor(llm_client),
+    AgentType.TSA: ToolSuggestionAgent(llm_client),
+    AgentType.TOR: ToolOutputReformatter(llm_client),
+    AgentType.PLANNER: PlannerAgent(llm_client),
+    AgentType.VERIFIER: VerifierAgent(llm_client),
+    AgentType.MEMORY: MemoryAgent(llm_client),
+}
+
+# Initialize FAMA engine
+engine = FAMAEngine(llm_client, agent_pool)
+
+# Run the optimization pipeline
+results = engine.run(tasks)
+```
+
+## Architecture
+
+```
+fama/
+├── core/           # Core engine, orchestrator, mitigation
+├── agents/         # Specialized agents (DCE, TSA, TOR, Planner, Verifier, Memory)
+├── error_analysis/ # Error categorization and analysis
+├── tools/          # Tool registry and toolkit management
+├── benchmarks/     # Benchmark implementations (TauBench)
+└── llm/            # LLM client implementations
+```
+
+## Algorithm
+
+```
+for each task τ:
+    (ξτ, rτ) ← EXECUTE(τ)
+    if rτ == 0: F ← F ∪ {(τ, ξτ)}
+
+for each (τ, ξ) ∈ F:
+    for each error category e ∈ E:
+        oτ,e ← ANALYZE_e(ξ)
+    Oτ ← CONCAT({oτ,e})
+    Êτ ← ORCHESTRATE(Oτ, ξ)
+    A*_τ ← MITIGATE(Êτ, A)
+```
+
+## Key Features
+
+- **Meta-agentic**: Operates at a higher level than the agents it optimizes
+- **Dynamic**: Selects minimal agent subset per-task based on failure analysis
+- **Failure-aware**: Explicitly analyzes and addresses failure patterns
+- **Generalizable**: Model-agnostic, works with any LLM-backed agent
+
+## License
+
+MIT License - see LICENSE file for details.
